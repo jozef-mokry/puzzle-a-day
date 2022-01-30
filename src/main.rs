@@ -7,13 +7,13 @@ const BOARD_COLS: usize = 7;
 struct Board(u64);
 
 impl Board {
-    fn set(self: &mut Self, row: usize, col: usize) {
+    fn set(&mut self, row: usize, col: usize) {
         self.0 |= 1 << ((row * BOARD_COLS) + col)
     }
-    fn get(self: &Self, row: usize, col: usize) -> usize {
+    fn get(&self, row: usize, col: usize) -> usize {
         self.0 as usize >> (row * BOARD_COLS + col) & 1usize
     }
-    fn print(self: &Self) {
+    fn print(&self) {
         for row in 0..BOARD_ROWS {
             for col in 0..BOARD_COLS {
                 if self.get(row, col) == 1 {
@@ -26,11 +26,15 @@ impl Board {
         }
         println!();
     }
-    fn can_add(self: &Self, other: &Self) -> bool {
+    fn can_add(&self, other: &Self) -> bool {
         (self.0 & other.0) == 0
     }
-    fn add(self: &Self, other: &Self) -> Self {
+    fn add(&self, other: &Self) -> Self {
         Board(self.0 | other.0)
+    }
+
+    fn remove(&self, other: &Self) -> Self {
+        Board(self.0 & !other.0)
     }
 
     fn build_empty_board() -> Self {
@@ -42,6 +46,20 @@ impl Board {
         start_board.set(6, 5);
         start_board.set(6, 6);
         start_board
+    }
+
+    fn build_target_board(month: usize, day: usize) -> Self {
+        let mut board = Self::build_empty_board();
+        let (m_row, m_col) = (month / 6, month % 6);
+        let (d_row, d_col) = (2 + (day / 7), day % 7);
+
+        board.set(m_row, m_col);
+        board.set(d_row, d_col);
+
+        board.0 = !board.0;
+        board.0 &= (1 << (BOARD_ROWS * BOARD_COLS)) - 1;
+
+        board
     }
 }
 
@@ -134,7 +152,7 @@ impl Piece {
         Piece { pos, name: "big L" }
     }
 
-    fn on_board(self: &Self) -> Board {
+    fn on_board(&self) -> Board {
         let mut b = Board(0);
         for &(row, col) in &self.pos {
             b.set(row as usize, col as usize)
@@ -142,7 +160,7 @@ impl Piece {
         b
     }
 
-    fn rotate_cw(self: &Self) -> Self {
+    fn rotate_cw(&self) -> Self {
         let pos = self.pos.iter().copied().map(|(r, c)| (c, -r)).collect();
         Piece {
             pos,
@@ -151,7 +169,7 @@ impl Piece {
         .normalized()
     }
 
-    fn flip(self: &Self) -> Self {
+    fn flip(&self) -> Self {
         let pos = self.pos.iter().copied().map(|(r, c)| (r, -c)).collect();
         Piece {
             pos,
@@ -160,7 +178,7 @@ impl Piece {
         .normalized()
     }
 
-    fn normalized(self: Self) -> Self {
+    fn normalized(self) -> Self {
         let (mut min_row, mut min_col) = (None, None);
         for &(r, c) in &self.pos {
             min_row = match min_row {
@@ -185,7 +203,7 @@ impl Piece {
         }
     }
 
-    fn shifted(self: &Self, row: i64, col: i64) -> Option<Piece> {
+    fn shifted(&self, row: i64, col: i64) -> Option<Piece> {
         let pos = self
             .pos
             .iter()
@@ -217,9 +235,51 @@ impl Piece {
         ]
     }
 }
+struct Solution(Vec<Board>);
+impl Solution {
+    fn print(&self) {
+        let chars = ['🟥', '🟦', '🟫', '🟩', '🟧', '🟪', '🟨', '⬜'];
+        for row in 0..BOARD_ROWS {
+            for col in 0..BOARD_COLS {
+                if let Some(i) = self.0.iter().position(|board| board.get(row, col) == 1) {
+                    print!("{}", chars[i]);
+                } else {
+                    print!("⬛");
+                }
+            }
+            println!();
+        }
+        println!();
+    }
+}
+
+fn get_solutions(board: &Board, parent: &HashMap<Board, Vec<Board>>) -> Vec<Solution> {
+    if board.0 == 0 {
+        return vec![Solution(vec![])];
+    }
+    match parent.get(board) {
+        None => vec![],
+        Some(prev_boards) => prev_boards
+            .iter()
+            .copied()
+            .flat_map(|prev_board| {
+                get_solutions(&board.remove(&prev_board), parent)
+                    .into_iter()
+                    .map(|mut sol| {
+                        sol.0.push(prev_board);
+                        sol
+                    })
+                    .collect::<Vec<Solution>>()
+            })
+            .collect(),
+    }
+}
 
 fn solve(month: usize, day: usize) {
-    // build start board
+    // let's work 0-based
+    let month = month - 1;
+    let day = day - 1;
+
     let pieces = Piece::build_all_pieces();
     let mut empty_board = Board::build_empty_board();
     empty_board.set(month / 6, month % 6);
@@ -231,6 +291,9 @@ fn solve(month: usize, day: usize) {
 
     let mut options: HashSet<_> = all_piece_boards[0].boards.iter().copied().collect();
     let mut parent: HashMap<Board, Vec<Board>> = HashMap::new();
+    for opt in &options {
+        parent.insert(*opt, vec![*opt]);
+    }
     for piece_boards in &all_piece_boards[1..] {
         let mut new_options: HashSet<_> = HashSet::new();
         for board in &piece_boards.boards {
@@ -238,45 +301,20 @@ fn solve(month: usize, day: usize) {
                 if option.can_add(board) {
                     let combined = option.add(board);
                     new_options.insert(combined);
-                    parent.entry(combined).or_default().push(option.clone());
+                    parent.entry(combined).or_default().push(*board);
                 }
             }
         }
         options = new_options;
     }
 
-    assert!(options.len() == 1);
-    fn count_solutions(board: &Board, parent: &HashMap<Board, Vec<Board>>) -> usize {
-        match parent.get(board) {
-            None => 1,
-            Some(boards) => boards.iter().map(|x| count_solutions(x, parent)).sum(),
-        }
+    let sols = get_solutions(&Board::build_target_board(month, day), &parent);
+    for (i, sol) in sols.iter().enumerate() {
+        println!("--- Solution {} ---", i + 1);
+        sol.print();
     }
-    let solution_count = count_solutions(&options.into_iter().next().unwrap(), &parent);
-    println!(
-        "Day {} Month {} has {} solutions",
-        day, month, solution_count
-    );
-    // for (i, mut option) in options.iter().enumerate() {
-    //     println!("Solution {}", i);
-    //     loop {
-    //         option.print();
-    //         match parent.get(option) {
-    //             None => {
-    //                 break;
-    //             }
-    //             Some(opt) => {
-    //                 option = opt;
-    //             }
-    //         }
-    //     }
-    // }
 }
 
 fn main() {
-    for month in 0..12 {
-        for day in 0..31 {
-            solve(month, day);
-        }
-    }
+    solve(10, 6);
 }
