@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::env;
+
 const BOARD_ROWS: usize = 7;
 const BOARD_COLS: usize = 7;
 
@@ -268,8 +270,11 @@ fn solve(month: usize, day: usize) {
 
     let pieces = Piece::build_all_pieces();
     let mut empty_board = Board::build_empty_board();
+
+    // to get solutions for all days all at once, comment out the next two lines
     empty_board.set(month / 6, month % 6);
     empty_board.set(2 + (day / 7), day % 7);
+
     let mut all_piece_boards = vec![];
     for piece in pieces {
         all_piece_boards.push(PieceBoards::from(piece, &empty_board));
@@ -302,5 +307,24 @@ fn solve(month: usize, day: usize) {
 }
 
 fn main() {
-    solve(10, 6);
+    let mut args = env::args().skip(1);
+    let day = args
+        .next()
+        .expect("missing first argument: day")
+        .parse::<usize>()
+        .expect("first argument must be a number between 1 and 31 inclusive");
+    assert!(
+        day > 0 && day < 32,
+        "First argument must be a number between 1 and 31 inclusive"
+    );
+    let month = args
+        .next()
+        .expect("missing first argument: month")
+        .parse::<usize>()
+        .expect("second argument must be a number between 1 and 12 inclusive");
+    assert!(
+        month > 0 && month < 13,
+        "second argument must be a number between 1 and 12 inclusive"
+    );
+    solve(month, day);
 }
