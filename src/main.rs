@@ -3,6 +3,7 @@ use std::collections::HashSet;
 const BOARD_ROWS: usize = 7;
 const BOARD_COLS: usize = 7;
 
+// represent 7x7 board in a 64-bit integer
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 struct Board(u64);
 
@@ -12,19 +13,6 @@ impl Board {
     }
     fn get(&self, row: usize, col: usize) -> usize {
         self.0 as usize >> (row * BOARD_COLS + col) & 1usize
-    }
-    fn print(&self) {
-        for row in 0..BOARD_ROWS {
-            for col in 0..BOARD_COLS {
-                if self.get(row, col) == 1 {
-                    print!("x");
-                } else {
-                    print!(".");
-                }
-            }
-            println!();
-        }
-        println!();
     }
     fn can_add(&self, other: &Self) -> bool {
         (self.0 & other.0) == 0
@@ -64,7 +52,6 @@ impl Board {
 }
 
 struct PieceBoards {
-    piece: Piece,
     boards: Vec<Board>,
 }
 
@@ -98,7 +85,6 @@ impl PieceBoards {
         }
 
         PieceBoards {
-            piece,
             boards: boards.into_iter().collect(),
         }
     }
